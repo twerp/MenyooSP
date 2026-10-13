@@ -21,6 +21,14 @@ namespace sub
 	// Hue is undefined for greys (saturation 0), so the last known hue is kept
 	// for display in the Set Colour menu's HSL rows.
 	static int s_lastKnownHue = 0;
+	// HSL working state for the Set Colour menu. RGB remains the source of truth,
+	// but it only has 8 bits per channel: at low saturation or extreme lightness a
+	// 1-unit hue/saturation step rounds back to the same RGB, so re-deriving the
+	// HSL values each frame leaves them stuck. These cache the in-progress values
+	// and are only re-derived from RGB when the colour changes from somewhere else.
+	static int s_paintsHue = 0, s_paintsSat = 0, s_paintsLight = 0;
+	// Last RGB written by the HSL rows, used to detect external colour changes.
+	static int s_paintsLastRgbR = -1, s_paintsLastRgbG = -1, s_paintsLastRgbB = -1;
 
 	void SetVehicleModShopTarget(Vehicle vehicle)
 	{
@@ -1325,14 +1333,24 @@ namespace sub
 		case 10: GET_HUD_COLOUR(s_selectedVehicleHandle, &ms_paints_rgb_r, &ms_paints_rgb_g, &ms_paints_rgb_b, &ms_paints_rgb_a); break;
 		}
 
-		// The HSL rows are derived views of the RGB values above; RGB stays the
-		// single source of truth. Editing an HSL row converts back to RGB.
-		int ms_paints_hue = 0, ms_paints_sat = 0, ms_paints_light = 0;
-		RgbToHsl(ms_paints_rgb_r, ms_paints_rgb_g, ms_paints_rgb_b, ms_paints_hue, ms_paints_sat, ms_paints_light);
-		if (ms_paints_sat != 0)
-			s_lastKnownHue = ms_paints_hue;
+		// The HSL rows are derived views of the RGB values above, which stay the
+		// single source of truth. They are only re-derived when the colour has
+		// changed from somewhere other than these rows; otherwise the cached
+		// values are kept so that a 1-unit step survives the 8-bit RGB round-trip.
+		if (ms_paints_rgb_r != s_paintsLastRgbR ||
+			ms_paints_rgb_g != s_paintsLastRgbG ||
+			ms_paints_rgb_b != s_paintsLastRgbB)
+		{
+			RgbToHsl(ms_paints_rgb_r, ms_paints_rgb_g, ms_paints_rgb_b, s_paintsHue, s_paintsSat, s_paintsLight);
+			s_paintsLastRgbR = ms_paints_rgb_r;
+			s_paintsLastRgbG = ms_paints_rgb_g;
+			s_paintsLastRgbB = ms_paints_rgb_b;
+		}
+		if (s_paintsSat != 0)
+			s_lastKnownHue = s_paintsHue;
 		else
-			ms_paints_hue = s_lastKnownHue;
+			s_paintsHue = s_lastKnownHue;
+		int ms_paints_hue = s_paintsHue, ms_paints_sat = s_paintsSat, ms_paints_light = s_paintsLight;
 
 		AddTitle("Set Colour");
 		if (bitMSPaintsRGBMode == 0 || bitMSPaintsRGBMode == 1)
@@ -1481,9 +1499,11 @@ namespace sub
 			ms_paints_hue += (ms_paints_hue_plus ? 1 : -1);
 			if (ms_paints_hue < 0) ms_paints_hue = 359;
 			else if (ms_paints_hue > 359) ms_paints_hue = 0;
+			s_paintsHue = ms_paints_hue;
 			s_lastKnownHue = ms_paints_hue;
 			HslToRgb(ms_paints_hue, ms_paints_sat, ms_paints_light, ms_paints_rgb_r, ms_paints_rgb_g, ms_paints_rgb_b);
 			rgb_mode_set_carcol(s_selectedVehicleHandle, ms_paints_rgb_r, ms_paints_rgb_g, ms_paints_rgb_b, ms_paints_rgb_a);
+			s_paintsLastRgbR = ms_paints_rgb_r; s_paintsLastRgbG = ms_paints_rgb_g; s_paintsLastRgbB = ms_paints_rgb_b;
 			return;
 		}
 		if (ms_paints_hue_custom) {
@@ -1493,9 +1513,11 @@ namespace sub
 				try
 				{
 					ms_paints_hue = abs(stoi(inputStr)) % 360;
+					s_paintsHue = ms_paints_hue;
 					s_lastKnownHue = ms_paints_hue;
 					HslToRgb(ms_paints_hue, ms_paints_sat, ms_paints_light, ms_paints_rgb_r, ms_paints_rgb_g, ms_paints_rgb_b);
 					rgb_mode_set_carcol(s_selectedVehicleHandle, ms_paints_rgb_r, ms_paints_rgb_g, ms_paints_rgb_b, ms_paints_rgb_a);
+					s_paintsLastRgbR = ms_paints_rgb_r; s_paintsLastRgbG = ms_paints_rgb_g; s_paintsLastRgbB = ms_paints_rgb_b;
 				}
 				catch (...)
 				{
@@ -1509,8 +1531,10 @@ namespace sub
 			ms_paints_sat += (ms_paints_sat_plus ? 1 : -1);
 			if (ms_paints_sat < 0) ms_paints_sat = 100;
 			else if (ms_paints_sat > 100) ms_paints_sat = 0;
+			s_paintsSat = ms_paints_sat;
 			HslToRgb(ms_paints_hue, ms_paints_sat, ms_paints_light, ms_paints_rgb_r, ms_paints_rgb_g, ms_paints_rgb_b);
 			rgb_mode_set_carcol(s_selectedVehicleHandle, ms_paints_rgb_r, ms_paints_rgb_g, ms_paints_rgb_b, ms_paints_rgb_a);
+			s_paintsLastRgbR = ms_paints_rgb_r; s_paintsLastRgbG = ms_paints_rgb_g; s_paintsLastRgbB = ms_paints_rgb_b;
 			return;
 		}
 		if (ms_paints_sat_custom) {
@@ -1525,8 +1549,10 @@ namespace sub
 					else
 					{
 						ms_paints_sat = newVal;
+						s_paintsSat = ms_paints_sat;
 						HslToRgb(ms_paints_hue, ms_paints_sat, ms_paints_light, ms_paints_rgb_r, ms_paints_rgb_g, ms_paints_rgb_b);
 						rgb_mode_set_carcol(s_selectedVehicleHandle, ms_paints_rgb_r, ms_paints_rgb_g, ms_paints_rgb_b, ms_paints_rgb_a);
+						s_paintsLastRgbR = ms_paints_rgb_r; s_paintsLastRgbG = ms_paints_rgb_g; s_paintsLastRgbB = ms_paints_rgb_b;
 					}
 				}
 				catch (...)
@@ -1541,8 +1567,10 @@ namespace sub
 			ms_paints_light += (ms_paints_light_plus ? 1 : -1);
 			if (ms_paints_light < 0) ms_paints_light = 100;
 			else if (ms_paints_light > 100) ms_paints_light = 0;
+			s_paintsLight = ms_paints_light;
 			HslToRgb(ms_paints_hue, ms_paints_sat, ms_paints_light, ms_paints_rgb_r, ms_paints_rgb_g, ms_paints_rgb_b);
 			rgb_mode_set_carcol(s_selectedVehicleHandle, ms_paints_rgb_r, ms_paints_rgb_g, ms_paints_rgb_b, ms_paints_rgb_a);
+			s_paintsLastRgbR = ms_paints_rgb_r; s_paintsLastRgbG = ms_paints_rgb_g; s_paintsLastRgbB = ms_paints_rgb_b;
 			return;
 		}
 		if (ms_paints_light_custom) {
@@ -1557,8 +1585,10 @@ namespace sub
 					else
 					{
 						ms_paints_light = newVal;
+						s_paintsLight = ms_paints_light;
 						HslToRgb(ms_paints_hue, ms_paints_sat, ms_paints_light, ms_paints_rgb_r, ms_paints_rgb_g, ms_paints_rgb_b);
 						rgb_mode_set_carcol(s_selectedVehicleHandle, ms_paints_rgb_r, ms_paints_rgb_g, ms_paints_rgb_b, ms_paints_rgb_a);
+						s_paintsLastRgbR = ms_paints_rgb_r; s_paintsLastRgbG = ms_paints_rgb_g; s_paintsLastRgbB = ms_paints_rgb_b;
 					}
 				}
 				catch (...)
