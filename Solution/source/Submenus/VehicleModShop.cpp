@@ -18,6 +18,9 @@ namespace sub
 	static INT s_selectedPaintPart = 1;
 	static INT s_selectedModSlot = 0;
 	static int s_selectedHudColour = 0;
+	// Hue is undefined for greys (saturation 0), so the last known hue is kept
+	// for display in the Set Colour menu's HSL rows.
+	static int s_lastKnownHue = 0;
 
 	void SetVehicleModShopTarget(Vehicle vehicle)
 	{
@@ -52,11 +55,11 @@ namespace sub
 
 	// Paints
 
-	struct NamedVehiclePaint 
-	{ 
-		std::string name; 
+	struct NamedVehiclePaint
+	{
+		std::string name;
 		INT16 paint;
-		INT16 pearl; 
+		INT16 pearl;
 	};
 
 #pragma region paintvectors
@@ -420,7 +423,7 @@ namespace sub
 
 					PAINTS_MATTE[i].paint = colour;
 					PAINTS_MATTE[i].pearl = pearl;
-					addlog(ige::LogType::LOG_TRACE, "Added Matte Colour: " + PAINTS_MATTE[i].name + ", Paint ID: " + std::to_string(PAINTS_MATTE[i].paint) + ", Pearl ID: " + std::to_string(PAINTS_MATTE[i].pearl));	
+					addlog(ige::LogType::LOG_TRACE, "Added Matte Colour: " + PAINTS_MATTE[i].name + ", Paint ID: " + std::to_string(PAINTS_MATTE[i].paint) + ", Pearl ID: " + std::to_string(PAINTS_MATTE[i].pearl));
 					break;
 				case 4:
 					PAINTS_METAL.resize(numcols);
@@ -786,8 +789,8 @@ namespace sub
 			MSPaints_RColour = 0,
 			MSPaints_primRGB = 0,
 			copypaint = 0;
-		
-		
+
+
 		GTAvehicle vehicle = s_selectedVehicleHandle;
 
 		INT paintIndex;
@@ -1224,6 +1227,15 @@ namespace sub
 			ms_paints_rgb_a_custom = 0,
 			ms_paints_rgb_a_plus = 0,
 			ms_paints_rgb_a_minus = 0,
+			ms_paints_hue_custom = 0,
+			ms_paints_hue_plus = 0,
+			ms_paints_hue_minus = 0,
+			ms_paints_sat_custom = 0,
+			ms_paints_sat_plus = 0,
+			ms_paints_sat_minus = 0,
+			ms_paints_light_custom = 0,
+			ms_paints_light_plus = 0,
+			ms_paints_light_minus = 0,
 			ms_paints_hexinput = 0,
 			settings_hud_c_custom = 0,
 			settings_hud_c_plus = 0,
@@ -1312,6 +1324,16 @@ namespace sub
 		case 9: ms_paints_rgb_r = g_spawnVehicleNeonColor.R; ms_paints_rgb_g = g_spawnVehicleNeonColor.G; ms_paints_rgb_b = g_spawnVehicleNeonColor.B; break;
 		case 10: GET_HUD_COLOUR(s_selectedVehicleHandle, &ms_paints_rgb_r, &ms_paints_rgb_g, &ms_paints_rgb_b, &ms_paints_rgb_a); break;
 		}
+
+		// The HSL rows are derived views of the RGB values above; RGB stays the
+		// single source of truth. Editing an HSL row converts back to RGB.
+		int ms_paints_hue = 0, ms_paints_sat = 0, ms_paints_light = 0;
+		RgbToHsl(ms_paints_rgb_r, ms_paints_rgb_g, ms_paints_rgb_b, ms_paints_hue, ms_paints_sat, ms_paints_light);
+		if (ms_paints_sat != 0)
+			s_lastKnownHue = ms_paints_hue;
+		else
+			ms_paints_hue = s_lastKnownHue;
+
 		AddTitle("Set Colour");
 		if (bitMSPaintsRGBMode == 0 || bitMSPaintsRGBMode == 1)
 			AddTexter("Paint Finish", ms_paints_finish, PAINTS_FINISH_NAMES, null, ms_paints_finish_plus, ms_paints_finish_minus);
@@ -1319,13 +1341,19 @@ namespace sub
 
 		switch (*Menu::activeOptionIndex)
 		{
-		case 2:case 3:case 4:
+		case 1:case 2:case 3:case 4:case 5:case 6:case 7:
 			AddPresetColourOptionsPreviews(ms_paints_rgb_r, ms_paints_rgb_g, ms_paints_rgb_b);
 			break;
 		}
 
 		AddNumber("Green", ms_paints_rgb_g, 0, ms_paints_rgb_g_custom, ms_paints_rgb_g_plus, ms_paints_rgb_g_minus);
 		AddNumber("Blue", ms_paints_rgb_b, 0, ms_paints_rgb_b_custom, ms_paints_rgb_b_plus, ms_paints_rgb_b_minus);
+		AddNumber("Hue", ms_paints_hue, 0, ms_paints_hue_custom, ms_paints_hue_plus, ms_paints_hue_minus);
+		AddOptionDescription("Colour wheel angle in degrees (0-359).");
+		AddNumber("Saturation", ms_paints_sat, 0, ms_paints_sat_custom, ms_paints_sat_plus, ms_paints_sat_minus);
+		AddOptionDescription("Colour intensity from grey (0%) to fully saturated (100%).");
+		AddNumber("Lightness", ms_paints_light, 0, ms_paints_light_custom, ms_paints_light_plus, ms_paints_light_minus);
+		AddOptionDescription("Brightness from black (0%) through the pure colour (50%) to white (100%).");
 		if (ms_paints_rgb_a != -1) AddNumber("Opacity", ms_paints_rgb_a, 0, ms_paints_rgb_a_custom, ms_paints_rgb_a_plus, ms_paints_rgb_a_minus);
 		AddTexter("HUD Colour", settingsHUDColor, HudColour::vHudColours, settings_hud_c_custom, settings_hud_c_plus, settings_hud_c_minus);
 		AddOptionDescription("Picks a colour from the game's HUD colour presets.");
@@ -1449,8 +1477,100 @@ namespace sub
 			return;
 		}
 
+		if (ms_paints_hue_plus || ms_paints_hue_minus) {
+			ms_paints_hue += (ms_paints_hue_plus ? 1 : -1);
+			if (ms_paints_hue < 0) ms_paints_hue = 359;
+			else if (ms_paints_hue > 359) ms_paints_hue = 0;
+			s_lastKnownHue = ms_paints_hue;
+			HslToRgb(ms_paints_hue, ms_paints_sat, ms_paints_light, ms_paints_rgb_r, ms_paints_rgb_g, ms_paints_rgb_b);
+			rgb_mode_set_carcol(s_selectedVehicleHandle, ms_paints_rgb_r, ms_paints_rgb_g, ms_paints_rgb_b, ms_paints_rgb_a);
+			return;
+		}
+		if (ms_paints_hue_custom) {
+			std::string inputStr = Game::InputBox("", 4U, "", std::to_string(ms_paints_hue));
+			if (inputStr.length() > 0)
+			{
+				try
+				{
+					ms_paints_hue = abs(stoi(inputStr)) % 360;
+					s_lastKnownHue = ms_paints_hue;
+					HslToRgb(ms_paints_hue, ms_paints_sat, ms_paints_light, ms_paints_rgb_r, ms_paints_rgb_g, ms_paints_rgb_b);
+					rgb_mode_set_carcol(s_selectedVehicleHandle, ms_paints_rgb_r, ms_paints_rgb_g, ms_paints_rgb_b, ms_paints_rgb_a);
+				}
+				catch (...)
+				{
+					Game::Print::PrintErrorInvalidInput(inputStr);
+				}
+			}
+			return;
+		}
+
+		if (ms_paints_sat_plus || ms_paints_sat_minus) {
+			ms_paints_sat += (ms_paints_sat_plus ? 1 : -1);
+			if (ms_paints_sat < 0) ms_paints_sat = 100;
+			else if (ms_paints_sat > 100) ms_paints_sat = 0;
+			HslToRgb(ms_paints_hue, ms_paints_sat, ms_paints_light, ms_paints_rgb_r, ms_paints_rgb_g, ms_paints_rgb_b);
+			rgb_mode_set_carcol(s_selectedVehicleHandle, ms_paints_rgb_r, ms_paints_rgb_g, ms_paints_rgb_b, ms_paints_rgb_a);
+			return;
+		}
+		if (ms_paints_sat_custom) {
+			std::string inputStr = Game::InputBox("", 4U, "", std::to_string(ms_paints_sat));
+			if (inputStr.length() > 0)
+			{
+				try
+				{
+					int newVal = abs(stoi(inputStr));
+					if (newVal < 0 || newVal > 100)
+						Game::Print::PrintErrorInvalidInput(inputStr);
+					else
+					{
+						ms_paints_sat = newVal;
+						HslToRgb(ms_paints_hue, ms_paints_sat, ms_paints_light, ms_paints_rgb_r, ms_paints_rgb_g, ms_paints_rgb_b);
+						rgb_mode_set_carcol(s_selectedVehicleHandle, ms_paints_rgb_r, ms_paints_rgb_g, ms_paints_rgb_b, ms_paints_rgb_a);
+					}
+				}
+				catch (...)
+				{
+					Game::Print::PrintErrorInvalidInput(inputStr);
+				}
+			}
+			return;
+		}
+
+		if (ms_paints_light_plus || ms_paints_light_minus) {
+			ms_paints_light += (ms_paints_light_plus ? 1 : -1);
+			if (ms_paints_light < 0) ms_paints_light = 100;
+			else if (ms_paints_light > 100) ms_paints_light = 0;
+			HslToRgb(ms_paints_hue, ms_paints_sat, ms_paints_light, ms_paints_rgb_r, ms_paints_rgb_g, ms_paints_rgb_b);
+			rgb_mode_set_carcol(s_selectedVehicleHandle, ms_paints_rgb_r, ms_paints_rgb_g, ms_paints_rgb_b, ms_paints_rgb_a);
+			return;
+		}
+		if (ms_paints_light_custom) {
+			std::string inputStr = Game::InputBox("", 4U, "", std::to_string(ms_paints_light));
+			if (inputStr.length() > 0)
+			{
+				try
+				{
+					int newVal = abs(stoi(inputStr));
+					if (newVal < 0 || newVal > 100)
+						Game::Print::PrintErrorInvalidInput(inputStr);
+					else
+					{
+						ms_paints_light = newVal;
+						HslToRgb(ms_paints_hue, ms_paints_sat, ms_paints_light, ms_paints_rgb_r, ms_paints_rgb_g, ms_paints_rgb_b);
+						rgb_mode_set_carcol(s_selectedVehicleHandle, ms_paints_rgb_r, ms_paints_rgb_g, ms_paints_rgb_b, ms_paints_rgb_a);
+					}
+				}
+				catch (...)
+				{
+					Game::Print::PrintErrorInvalidInput(inputStr);
+				}
+			}
+			return;
+		}
+
 		if (ms_paints_rgb_a_plus) {
-			if (ms_paints_rgb_a < 255) ms_paints_rgb_b++;
+			if (ms_paints_rgb_a < 255) ms_paints_rgb_a++;
 			else ms_paints_rgb_a = 0;
 			rgb_mode_set_carcol(s_selectedVehicleHandle, ms_paints_rgb_r, ms_paints_rgb_g, ms_paints_rgb_b, ms_paints_rgb_a);
 			return;
@@ -1645,7 +1765,7 @@ namespace sub
 					SET_VEHICLE_MOD(vehicle, i, upgradeIt?modIndex:-1, 0);
 					continue;
 				}
-				UINT8 modIndex = GET_NUM_VEHICLE_MODS(vehicle, i) - 1;				
+				UINT8 modIndex = GET_NUM_VEHICLE_MODS(vehicle, i) - 1;
 				if (modIndex > -1)
 					modIndex = std::rand() % (modIndex + 2) - 1;
 				if (11 <= i && 16 >= i)
@@ -1672,7 +1792,7 @@ namespace sub
 		{
 			CLEAR_VEHICLE_CUSTOM_PRIMARY_COLOUR(vehicle);
 			GET_VEHICLE_COLOURS(vehicle, &i, &inull);
-			SET_VEHICLE_COLOURS(vehicle, prim_col_index, inull);	
+			SET_VEHICLE_COLOURS(vehicle, prim_col_index, inull);
 			SET_VEHICLE_EXTRA_COLOURS(vehicle, 0, colour2);
 		}
 		if (sec_col_index != -3) // basic paint secondary
@@ -2614,7 +2734,7 @@ namespace sub
 
 	namespace MSWheels_catind
 	{
-		//bool ms_wheel_windice_pressed = false; 
+		//bool ms_wheel_windice_pressed = false;
 		bool ms_bit_bike_back;
 		//INT ms_old_wtype, ms_old_windex, ms_old_windexBB;
 		int ms_max_windices;
@@ -2855,7 +2975,7 @@ namespace sub
 		//}
 
 		//if (wtype == WheelType::Bennys || wtype == WheelType::BennysBespoke)
-		//if (true) //no need to split chrome and normal with addon wheels.    
+		//if (true) //no need to split chrome and normal with addon wheels.
 		//{
 			//if (ms_bit_bike_back) // Can probably remove this whole if statement with this exclusively working for bike wheels now - ijc
 			//{
@@ -3628,7 +3748,7 @@ namespace sub
 				try { loop_neon_delay = std::stoi(inputStr); }
 				catch (...) { Game::Print::PrintErrorInvalidInput(inputStr); }
 			}
-		}	
+		}
 	}
 
 	// Engine sound

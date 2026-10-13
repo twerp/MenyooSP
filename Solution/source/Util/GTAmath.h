@@ -356,7 +356,7 @@ public:
 	/// <remarks>
 	/// This method performs the linear interpolation based on the following formula.
 	/// <code>start + (end - start) * amount</code>
-	/// Passing <paramref name="amount"/> a value of 0 will cause <paramref name="start"/> to be returned; a value of 1 will cause <paramref name="end"/> to be returned. 
+	/// Passing <paramref name="amount"/> a value of 0 will cause <paramref name="start"/> to be returned; a value of 1 will cause <paramref name="end"/> to be returned.
 	/// </remarks>
 	static Vector3 Lerp(Vector3 start, Vector3 end, float amount);
 
@@ -384,12 +384,12 @@ public:
 	static Vector3 Cross(Vector3 left, Vector3 right);
 
 	/// <summary>
-	/// Returns the reflection of a vector off a surface that has the specified normal. 
+	/// Returns the reflection of a vector off a surface that has the specified normal.
 	/// </summary>
 	/// <param name="vector">The source vector.</param>
 	/// <param name="normal">Normal of the surface.</param>
 	/// <returns>The reflected vector.</returns>
-	/// <remarks>Reflect only gives the direction of a reflection off a surface, it does not determine 
+	/// <remarks>Reflect only gives the direction of a reflection off a surface, it does not determine
 	/// whether the original vector was close enough to the surface to hit it.</remarks>
 	static Vector3 Reflect(Vector3 vector, Vector3 normal);
 
@@ -513,25 +513,25 @@ public:
 
 
 	/// <summary>
-	/// Returns a value that indicates whether the current instance is equal to the specified object. 
+	/// Returns a value that indicates whether the current instance is equal to the specified object.
 	/// </summary>
 	/// <param name="other">Object to make the comparison with.</param>
 	/// <returns><c>true</c> if the current instance is equal to the specified object; <c>false</c> otherwise.</returns>
 	virtual bool Equals(const Vector3& other) const;
 
 	/// <summary>
-	/// Returns a value that indicates whether the current instance is equal to the specified object. 
+	/// Returns a value that indicates whether the current instance is equal to the specified object.
 	/// </summary>
 	/// <param name="other">Object to make the comparison with.</param>
 	/// <returns><c>true</c> if the current instance is equal to the specified object; <c>false</c> otherwise.</returns>
 	virtual bool Equals(const Vector3_t& other) const;
 
 	/// <summary>
-	/// Determines whether the specified object instances are considered equal. 
+	/// Determines whether the specified object instances are considered equal.
 	/// </summary>
 	/// <param name="value1">The first value to compare.</param>
 	/// <param name="value2">The second value to compare.</param>
-	/// <returns><c>true</c> if <paramref name="value1"/> contains the same values as <paramref name="value2"/>; 
+	/// <returns><c>true</c> if <paramref name="value1"/> contains the same values as <paramref name="value2"/>;
 	/// otherwise, <c>false</c>.</returns>
 	static bool Equals(const Vector3& value1, const Vector3& value2);
 
@@ -540,7 +540,7 @@ public:
 
 	static Vector3 RotationToDirection(const Vector3& rotation);
 	static Vector3 DirectionToRotation(Vector3 direction);
-	
+
 
 };
 
@@ -732,7 +732,7 @@ public:
 	/// <remarks>
 	/// This method performs the linear interpolation based on the following formula.
 	/// <code>start + (end - start) * amount</code>
-	/// Passing <paramref name="amount"/> a value of 0 will cause <paramref name="start"/> to be returned; a value of 1 will cause <paramref name="end"/> to be returned. 
+	/// Passing <paramref name="amount"/> a value of 0 will cause <paramref name="start"/> to be returned; a value of 1 will cause <paramref name="end"/> to be returned.
 	/// </remarks>
 	static Vector2 Lerp(Vector2 const& start, Vector2 const& end, float const& amount);
 
@@ -752,12 +752,12 @@ public:
 	static float Dot(Vector2 const& left, Vector2 const& right);
 
 	/// <summary>
-	/// Returns the reflection of a vector off a surface that has the specified normal. 
+	/// Returns the reflection of a vector off a surface that has the specified normal.
 	/// </summary>
 	/// <param name="vector">The source vector.</param>
 	/// <param name="normal">Normal of the surface.</param>
 	/// <returns>The reflected vector.</returns>
-	/// <remarks>Reflect only gives the direction of a reflection off a surface, it does not determine 
+	/// <remarks>Reflect only gives the direction of a reflection off a surface, it does not determine
 	/// whether the original vector was close enough to the surface to hit it.</remarks>
 	static Vector2 Reflect(Vector2 const& vector, Vector2 const& normal);
 
@@ -849,14 +849,14 @@ public:
 
 
 	/// <summary>
-	/// Returns a value that indicates whether the current instance is equal to the specified object. 
+	/// Returns a value that indicates whether the current instance is equal to the specified object.
 	/// </summary>
 	/// <param name="other">Object to make the comparison with.</param>
 	/// <returns><c>true</c> if the current instance is equal to the specified object; <c>false</c> otherwise.</returns>
 	virtual bool Equals(const Vector2& other) const;
 
 	/// <summary>
-	/// Determines whether the specified object instances are considered equal. 
+	/// Determines whether the specified object instances are considered equal.
 	/// </summary>
 	/// <param name="value1">The first value to compare.</param>
 	/// <param name="value2">The second value to compare.</param>
@@ -876,3 +876,8 @@ void WrapAngle(float& angle);
 Vector3 DegreeToRadian(const Vector3& angles);
 float GetHeadingFromCoords(const Vector3& source, const Vector3& target);
 
+// Colour conversion between 8-bit RGB and HSL.
+// Hue is in degrees (0-359), saturation and lightness are percentages (0-100).
+// Math based on https://www.niwa.nu/2013/05/math-behind-colorspace-conversions-rgb-hsl/
+void RgbToHsl(int r, int g, int b, int& hue, int& saturation, int& lightness);
+void HslToRgb(int hue, int saturation, int lightness, int& r, int& g, int& b);

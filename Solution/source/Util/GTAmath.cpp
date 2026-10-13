@@ -777,3 +777,96 @@ float GetHeadingFromCoords(const Vector3& source, const Vector3& target)
 	return atan2((target.y - source.y), (target.x - source.x));
 }
 
+#pragma region Colour conversion (RGB <-> HSL)
+
+namespace
+{
+	float _hue_to_rgb_component(float temp1, float temp2, float t)
+	{
+		if (6.0f * t < 1.0f)
+			return temp2 + (temp1 - temp2) * 6.0f * t;
+		if (2.0f * t < 1.0f)
+			return temp1;
+		if (3.0f * t < 2.0f)
+			return temp2 + (temp1 - temp2) * (0.6666667f - t) * 6.0f;
+		return temp2;
+	}
+}
+
+void RgbToHsl(int r, int g, int b, int& hue, int& saturation, int& lightness)
+{
+	const float rf = r / 255.0f;
+	const float gf = g / 255.0f;
+	const float bf = b / 255.0f;
+
+	const float min = (rf < gf) ? (rf < bf ? rf : bf) : (gf < bf ? gf : bf);
+	const float max = (rf > gf) ? (rf > bf ? rf : bf) : (gf > bf ? gf : bf);
+
+	float h = 0.0f;
+	float s = 0.0f;
+	const float l = (max + min) / 2.0f;
+
+	if (max != min)
+	{
+		const float delta = max - min;
+		s = (l <= 0.5f) ? (delta / (max + min)) : (delta / (2.0f - max - min));
+
+		if (max == rf)
+			h = (gf - bf) / delta;
+		else if (max == gf)
+			h = 2.0f + (bf - rf) / delta;
+		else
+			h = 4.0f + (rf - gf) / delta;
+
+		h *= 60.0f;
+		if (h < 0.0f)
+			h += 360.0f;
+	}
+
+	hue = static_cast<int>(h + 0.5f) % 360;
+	saturation = static_cast<int>(s * 100.0f + 0.5f);
+	lightness = static_cast<int>(l * 100.0f + 0.5f);
+}
+
+void HslToRgb(int hue, int saturation, int lightness, int& r, int& g, int& b)
+{
+	int h = hue % 360;
+	if (h < 0)
+		h += 360;
+	int s = saturation < 0 ? 0 : (saturation > 100 ? 100 : saturation);
+	int l = lightness < 0 ? 0 : (lightness > 100 ? 100 : lightness);
+
+	const float hf = h / 360.0f;
+	const float sf = s / 100.0f;
+	const float lf = l / 100.0f;
+
+	float rf, gf, bf;
+
+	if (sf == 0.0f)
+	{
+		rf = gf = bf = lf; // shade of grey, hue is meaningless
+	}
+	else
+	{
+		const float temp1 = (lf < 0.5f) ? (lf * (1.0f + sf)) : (lf + sf - lf * sf);
+		const float temp2 = 2.0f * lf - temp1;
+
+		float tr = hf + 0.3333333f;
+		float tg = hf;
+		float tb = hf - 0.3333333f;
+
+		if (tr > 1.0f) tr -= 1.0f; else if (tr < 0.0f) tr += 1.0f;
+		if (tg > 1.0f) tg -= 1.0f; else if (tg < 0.0f) tg += 1.0f;
+		if (tb > 1.0f) tb -= 1.0f; else if (tb < 0.0f) tb += 1.0f;
+
+		rf = _hue_to_rgb_component(temp1, temp2, tr);
+		gf = _hue_to_rgb_component(temp1, temp2, tg);
+		bf = _hue_to_rgb_component(temp1, temp2, tb);
+	}
+
+	r = static_cast<int>(rf * 255.0f + 0.5f);
+	g = static_cast<int>(gf * 255.0f + 0.5f);
+	b = static_cast<int>(bf * 255.0f + 0.5f);
+}
+
+#pragma endregion
